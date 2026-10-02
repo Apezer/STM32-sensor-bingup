@@ -1,0 +1,28 @@
+# Keil build output
+Project/Objects/
+Project/Listings/
+Project/DebugConfig/
+Project/*.log
+Project/*.uvguix.*
+
+# Keil generated files
+*.axf
+*.bin
+*.crf
+*.d
+*.dep
+*.hex
+*.htm
+*.iex
+*.lnp
+*.lst
+*.map
+*.o
+*.obj
+*.plg
+*.sct
+*.tra
+
+# Temporary workspace files
+tmp/
+

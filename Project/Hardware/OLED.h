@@ -2,18 +2,18 @@
 #define __OLED_H
 
 #include "stm32f10x.h"                  // Device header
+#include "BSP_I2C.h"
 
 
 extern uint8_t OLED_DisplayBuf[8][128];
 extern const uint8_t Diode[];
 extern const uint8_t Kenan[];
 
-void OLED_GPIO_Init(void);
-void OLED_Init(void);
+void OLED_WriteCommand(uint8_t Command);
+void OLED_WriteData(uint8_t *Data, uint8_t Count);
+
+void OLED_Init(const BSP_I2C_TypeDef *I2C);
 void OLED_Clear(void);
-void OLED_I2C_Start(void);
-void OLED_I2C_Stop(void);
-void OLED_I2C_SendByte(uint8_t Byte);
 
 void OLED_Refresh(void);
 void OLED_ClearArea(uint8_t X, uint8_t Y, uint8_t Width, uint8_t Height);

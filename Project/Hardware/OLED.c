@@ -1,125 +1,66 @@
 #include "OLED_Font.h"
 #include "OLED.h"
+#include "BSP_I2C.h"
 #include <string.h>
 #include <stdarg.h>
 
-#define OLED_W_SCL(x)		GPIO_WriteBit(GPIOB, GPIO_Pin_8, (BitAction)(x))
-#define OLED_W_SDA(x)		GPIO_WriteBit(GPIOB, GPIO_Pin_9, (BitAction)(x))
+static const BSP_I2C_TypeDef *OLED_I2C;
 
-
-/**
-  * OLED显存数组
-  * 所有的显示函数，都只是对此显存数组进行读写
-  * 随后调用OLED_Update函数或OLED_UpdateArea函数
-  * 才会将显存数组的数据发送到OLED硬件，进行显示
-  */
+/* OLED显存缓冲区：8页，每页128字节，调用OLED_Refresh后才会更新屏幕。 */
 uint8_t OLED_DisplayBuf[8][128];
 
-void OLED_GPIO_Init(void)
-{
-	uint32_t i, j;
-	GPIO_InitTypeDef GPIO_InitStructure;
-
-	/* Wait for the OLED power supply to stabilize. */
-	for (i = 0; i < 1000; i ++)
-	{
-		for (j = 0; j < 1000; j ++);
-	}
-
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);
-
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_OD;
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_8;
-	GPIO_Init(GPIOB, &GPIO_InitStructure);
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_9;
-	GPIO_Init(GPIOB, &GPIO_InitStructure);
-
-	OLED_W_SCL(1);
-	OLED_W_SDA(1);
-}
-
-void OLED_I2C_Start(void)
-{
-	OLED_W_SDA(1);
-	OLED_W_SCL(1);
-	OLED_W_SDA(0);
-	OLED_W_SCL(0);
-}
-
-void OLED_I2C_Stop(void)
-{
-	OLED_W_SDA(0);
-	OLED_W_SCL(1);
-	OLED_W_SDA(1);
-}
-
-void OLED_I2C_SendByte(uint8_t Byte)
-{
-	uint8_t i;
-
-	for (i = 0; i < 8; i ++)
-	{
-		OLED_W_SDA(Byte & (0x80 >> i));
-		OLED_W_SCL(1);
-		OLED_W_SCL(0);
-	}
-	OLED_W_SCL(1);
-	OLED_W_SCL(0);
-}
-
-/**
-  * @brief  OLED写命令
-  * @param  Command 要写入的命令
-  * @retval 无
-  */
+/*****************************************************************
+ * @brief     向SSD1306发送一个命令字节
+ * @param     Command 要发送的SSD1306命令
+ * @return    void
+ * @example   OLED_WriteCommand(0xAE);
+ * @note      控制字节0x00表示后续字节为命令
+ ****************************************************************/
 void OLED_WriteCommand(uint8_t Command)
 {
-	OLED_I2C_Start();
-	OLED_I2C_SendByte(0x78);
-	OLED_I2C_SendByte(0x00);
-	OLED_I2C_SendByte(Command);
-	OLED_I2C_Stop();
+	BSP_I2C_Start(OLED_I2C);
+	BSP_I2C_SendByte(OLED_I2C, 0x78);
+	BSP_I2C_ReceiveAck(OLED_I2C);
+	BSP_I2C_SendByte(OLED_I2C, 0x00);
+	BSP_I2C_ReceiveAck(OLED_I2C);
+	BSP_I2C_SendByte(OLED_I2C, Command);
+	BSP_I2C_ReceiveAck(OLED_I2C);
+	BSP_I2C_Stop(OLED_I2C);
 }
 
-/**
-  * @brief  OLED写数据
-  * @param  Data 要写入的数据
-  * @retval 无
-  */
+/*****************************************************************
+ * @brief     向SSD1306连续写入显示数据
+ * @param     Data  指向待发送数据缓冲区的指针
+ * @param     Count 要发送的字节数
+ * @return    void
+ * @example   OLED_WriteData(OLED_DisplayBuf[0], 128);
+ * @note      控制字节0x40表示后续字节写入GDDRAM
+ ****************************************************************/
 void OLED_WriteData(uint8_t *Data, uint8_t Count)
 {
 	uint8_t i;
 	
-	OLED_I2C_Start();
-	OLED_I2C_SendByte(0x78);
-	OLED_I2C_SendByte(0x40);
+	BSP_I2C_Start(OLED_I2C);
+	BSP_I2C_SendByte(OLED_I2C, 0x78);
+	BSP_I2C_ReceiveAck(OLED_I2C);
+	BSP_I2C_SendByte(OLED_I2C, 0x40);
+	BSP_I2C_ReceiveAck(OLED_I2C);
 	for (i = 0; i < Count; i ++)
 	{
-		OLED_I2C_SendByte(Data[i]);
+		BSP_I2C_SendByte(OLED_I2C, Data[i]);
+		BSP_I2C_ReceiveAck(OLED_I2C);
 	}
-	OLED_I2C_Stop();
+	BSP_I2C_Stop(OLED_I2C);
 }
 
-/**
-  * @brief  OLED设置光标位置
-  * @param  Y 以左上角为原点，向下方向的坐标，范围：0~7
-  * @param  X 以左上角为原点，向右方向的坐标，范围：0~127
-  *       0             X轴           127 
-  *      .------------------------------->
-  *    0 |
-  *      |
-  *      |
-  *      |
-  *  Y轴 |
-  *      |
-  *      |
-  *      |
-  *   63 |
-  *      v
-  * 
-  * @retval OLED默认的Y轴，只能8个Bit为一组写入，即1页等于8个Y轴坐标
-  */
+/*****************************************************************
+ * @brief     设置SSD1306的页地址和列地址
+ * @param     Y 页地址，范围为0~7
+ * @param     X 列地址，范围为0~127
+ * @return    void
+ * @example   OLED_SetCursor(0, 0);
+ * @note      Y表示8像素高的页，不是0~63的像素坐标
+ ****************************************************************/
 void OLED_SetCursor(uint8_t Y, uint8_t X)
 {
 	OLED_WriteCommand(0xB0 | Y);					//设置Y位置
@@ -127,15 +68,13 @@ void OLED_SetCursor(uint8_t Y, uint8_t X)
 	OLED_WriteCommand(0x00 | (X & 0x0F));			//设置X位置低4位
 }
 
-/**
-  * 函    数：将OLED显存数组更新到OLED屏幕
-  * 参    数：无
-  * 返 回 值：无
-  * 说    明：所有的显示函数，都只是对OLED显存数组进行读写
-  *           随后调用OLED_Update函数或OLED_UpdateArea函数
-  *           才会将显存数组的数据发送到OLED硬件，进行显示
-  *           故调用显示函数后，要想真正地呈现在屏幕上，还需调用更新函数
-  */
+/*****************************************************************
+ * @brief     将STM32显存缓冲区更新到OLED屏幕
+ * @param     void
+ * @return    void
+ * @example   OLED_Refresh();
+ * @note      函数会按页发送完整的1024字节显存数据
+ ****************************************************************/
 void OLED_Refresh(void)
 {
 	uint8_t j;
@@ -149,11 +88,13 @@ void OLED_Refresh(void)
 	}
 }
 
-/**
-  * @brief  OLED清屏
-  * @param  无
-  * @retval 无
-  */
+/*****************************************************************
+ * @brief     清空STM32中的OLED显存缓冲区
+ * @param     void
+ * @return    void
+ * @example   OLED_Clear();
+ * @note      调用后还需执行OLED_Refresh才会更新屏幕
+ ****************************************************************/
 void OLED_Clear(void)
 {
 	uint8_t i, j;
@@ -168,13 +109,15 @@ void OLED_Clear(void)
 
 
 
-/**
-  * @brief  OLED显示一个字符
-  * @param  Line 行位置，范围：1~4
-  * @param  Column 列位置，范围：1~16
-  * @param  Char 要显示的一个字符，范围：ASCII可见字符
-  * @retval 无
-  */
+/*****************************************************************
+ * @brief     在显存缓冲区中写入一个8x16 ASCII字符
+ * @param     Line   显示行，范围为1~4
+ * @param     Column 显示列，范围为1~16
+ * @param     Char   要显示的ASCII可见字符
+ * @return    void
+ * @example   OLED_ShowChar(1, 1, 'A');
+ * @note      调用后还需执行OLED_Refresh才会更新屏幕
+ ****************************************************************/
 void OLED_ShowChar(uint8_t Line, uint8_t Column, char Char)
 {      	
 	uint8_t i;
@@ -188,13 +131,15 @@ void OLED_ShowChar(uint8_t Line, uint8_t Column, char Char)
 	}
 }
 
-/**
-  * @brief  OLED显示字符串
-  * @param  Line 起始行位置，范围：1~4
-  * @param  Column 起始列位置，范围：1~16
-  * @param  String 要显示的字符串，范围：ASCII可见字符
-  * @retval 无
-  */
+/*****************************************************************
+ * @brief     在显存缓冲区中写入ASCII字符串
+ * @param     Line   起始行，范围为1~4
+ * @param     Column 起始列，范围为1~16
+ * @param     String 指向以'\0'结尾字符串的指针
+ * @return    void
+ * @example   OLED_ShowString(1, 1, "MPU6050");
+ * @note      字符串不应超出屏幕右边界
+ ****************************************************************/
 void OLED_ShowString(uint8_t Line, uint8_t Column, char *String)
 {
 	uint8_t i;
@@ -206,10 +151,14 @@ void OLED_ShowString(uint8_t Line, uint8_t Column, char *String)
 
 
 
-/**
-  * @brief  OLED次方函数
-  * @retval 返回值等于X的Y次方
-  */
+/*****************************************************************
+ * @brief     计算X的Y次方
+ * @param     X 底数
+ * @param     Y 指数
+ * @return    uint32_t X的Y次方
+ * @example   Value = OLED_Pow(10, 3);
+ * @note      该函数用于数字的逐位显示
+ ****************************************************************/
 uint32_t OLED_Pow(uint32_t X, uint32_t Y)
 {
 	uint32_t Result = 1;
@@ -220,14 +169,16 @@ uint32_t OLED_Pow(uint32_t X, uint32_t Y)
 	return Result;
 }
 
-/**
-  * @brief  OLED显示数字（十进制，正数）
-  * @param  Line 起始行位置，范围：1~4
-  * @param  Column 起始列位置，范围：1~16
-  * @param  Number 要显示的数字，范围：0~4294967295
-  * @param  Length 要显示数字的长度，范围：1~10
-  * @retval 无
-  */
+/*****************************************************************
+ * @brief     在显存缓冲区中写入无符号十进制数字
+ * @param     Line   起始行，范围为1~4
+ * @param     Column 起始列，范围为1~16
+ * @param     Number 要显示的无符号数值
+ * @param     Length 显示位数，范围为1~10
+ * @return    void
+ * @example   OLED_ShowNum(1, 1, 1234, 4);
+ * @note      位数不足时在左侧显示0
+ ****************************************************************/
 void OLED_ShowNum(uint8_t Line, uint8_t Column, uint32_t Number, uint8_t Length)
 {
 	uint8_t i;
@@ -237,14 +188,16 @@ void OLED_ShowNum(uint8_t Line, uint8_t Column, uint32_t Number, uint8_t Length)
 	}
 }
 
-/**
-  * @brief  OLED显示数字（十进制，带符号数）
-  * @param  Line 起始行位置，范围：1~4
-  * @param  Column 起始列位置，范围：1~16
-  * @param  Number 要显示的数字，范围：-2147483648~2147483647
-  * @param  Length 要显示数字的长度，范围：1~10
-  * @retval 无
-  */
+/*****************************************************************
+ * @brief     在显存缓冲区中写入带符号十进制数字
+ * @param     Line   起始行，范围为1~4
+ * @param     Column 起始列，范围为1~16
+ * @param     Number 要显示的有符号数值
+ * @param     Length 不包含符号位的数字位数
+ * @return    void
+ * @example   OLED_ShowSignedNum(1, 1, -123, 3);
+ * @note      函数会在数字前显示'+'或'-'
+ ****************************************************************/
 void OLED_ShowSignedNum(uint8_t Line, uint8_t Column, int32_t Number, uint8_t Length)
 {
 	uint8_t i;
@@ -265,14 +218,16 @@ void OLED_ShowSignedNum(uint8_t Line, uint8_t Column, int32_t Number, uint8_t Le
 	}
 }
 
-/**
-  * @brief  OLED显示数字（十六进制，正数）
-  * @param  Line 起始行位置，范围：1~4
-  * @param  Column 起始列位置，范围：1~16
-  * @param  Number 要显示的数字，范围：0~0xFFFFFFFF
-  * @param  Length 要显示数字的长度，范围：1~8
-  * @retval 无
-  */
+/*****************************************************************
+ * @brief     在显存缓冲区中写入十六进制数字
+ * @param     Line   起始行，范围为1~4
+ * @param     Column 起始列，范围为1~16
+ * @param     Number 要显示的无符号数值
+ * @param     Length 显示位数，范围为1~8
+ * @return    void
+ * @example   OLED_ShowHexNum(1, 1, 0x68, 2);
+ * @note      字母A~F使用大写形式显示
+ ****************************************************************/
 void OLED_ShowHexNum(uint8_t Line, uint8_t Column, uint32_t Number, uint8_t Length)
 {
 	uint8_t i, SingleNumber;
@@ -290,14 +245,16 @@ void OLED_ShowHexNum(uint8_t Line, uint8_t Column, uint32_t Number, uint8_t Leng
 	}
 }
 
-/**
-  * @brief  OLED显示数字（二进制，正数）
-  * @param  Line 起始行位置，范围：1~4
-  * @param  Column 起始列位置，范围：1~16
-  * @param  Number 要显示的数字，范围：0~1111 1111 1111 1111
-  * @param  Length 要显示数字的长度，范围：1~16
-  * @retval 无
-  */
+/*****************************************************************
+ * @brief     在显存缓冲区中写入二进制数字
+ * @param     Line   起始行，范围为1~4
+ * @param     Column 起始列，范围为1~16
+ * @param     Number 要显示的无符号数值
+ * @param     Length 显示位数，范围为1~16
+ * @return    void
+ * @example   OLED_ShowBinNum(1, 1, 0x0F, 8);
+ * @note      位数不足时在左侧显示0
+ ****************************************************************/
 void OLED_ShowBinNum(uint8_t Line, uint8_t Column, uint32_t Number, uint8_t Length)
 {
 	uint8_t i;
@@ -308,15 +265,16 @@ void OLED_ShowBinNum(uint8_t Line, uint8_t Column, uint32_t Number, uint8_t Leng
 }
 
 
- /**
-  * 函    数：将OLED显存数组部分清零
-  * 参    数：X 指定区域左上角的横坐标，范围：0~127
-  * 参    数：Y 指定区域左上角的纵坐标，范围：0~63
-  * 参    数：Width 指定区域的宽度，范围：0~128
-  * 参    数：Height 指定区域的高度，范围：0~64
-  * 返 回 值：无
-  * 说    明：调用此函数后，要想真正地呈现在屏幕上，还需调用更新函数
-  */
+/*****************************************************************
+ * @brief     清空显存缓冲区中的指定矩形区域
+ * @param     X      区域左上角X坐标，范围为0~127
+ * @param     Y      区域左上角Y坐标，范围为0~63
+ * @param     Width  区域宽度，范围为0~128
+ * @param     Height 区域高度，范围为0~64
+ * @return    void
+ * @example   OLED_ClearArea(0, 0, 32, 16);
+ * @note      超出屏幕的区域会被自动裁剪
+ ****************************************************************/
 void OLED_ClearArea(uint8_t X, uint8_t Y, uint8_t Width, uint8_t Height)
 {
 	uint8_t i, j;
@@ -335,16 +293,17 @@ void OLED_ClearArea(uint8_t X, uint8_t Y, uint8_t Width, uint8_t Height)
 		}
 	}
 }
-/**
-  * 函    数：OLED显示图像
-  * 参    数：X 指定图像左上角的横坐标，范围：0~127
-  * 参    数：Y 指定图像左上角的纵坐标，范围：0~63
-  * 参    数：Width 指定图像的宽度，范围：0~128
-  * 参    数：Height 指定图像的高度，范围：0~64
-  * 参    数：Image 指定要显示的图像
-  * 返 回 值：无
-  * 说    明：调用此函数后，要想真正地呈现在屏幕上，还需调用更新函数
-  */
+/*****************************************************************
+ * @brief     将二值图像写入OLED显存缓冲区
+ * @param     X      图像左上角X坐标，范围为0~127
+ * @param     Y      图像左上角Y坐标，范围为0~63
+ * @param     Width  图像宽度，范围为0~128
+ * @param     Height 图像高度，范围为0~64
+ * @param     Image  指向图像数据的指针
+ * @return    void
+ * @example   OLED_ShowImage(0, 0, 16, 16, Image);
+ * @note      图像数据按页存放，调用后需执行OLED_Refresh
+ ****************************************************************/
 void OLED_ShowImage(uint8_t X, uint8_t Y, uint8_t Width, uint8_t Height, const uint8_t *Image)
 {
 	uint8_t i, j;
@@ -379,16 +338,15 @@ void OLED_ShowImage(uint8_t X, uint8_t Y, uint8_t Width, uint8_t Height, const u
 		}
 	}
 }
-/**
-  * 函    数：OLED显示汉字串
-  * 参    数：X 指定汉字串左上角的横坐标，范围：0~127
-  * 参    数：Y 指定汉字串左上角的纵坐标，范围：0~63
-  * 参    数：Chinese 指定要显示的汉字串，范围：必须全部为汉字或者全角字符，不要加入任何半角字符
-  *           显示的汉字需要在OLED_Data.c里的OLED_CF16x16数组定义
-  *           未找到指定汉字时，会显示默认图形（一个方框，内部一个问号）
-  * 返 回 值：无
-  * 说    明：调用此函数后，要想真正地呈现在屏幕上，还需调用更新函数
-  */
+/*****************************************************************
+ * @brief     将16x16汉字串写入OLED显存缓冲区
+ * @param     X       汉字串左上角X坐标，范围为0~127
+ * @param     Y       汉字串左上角Y坐标，范围为0~63
+ * @param     Chinese 指向以'\0'结尾的汉字字符串
+ * @return    void
+ * @example   OLED_ShowChinese(0, 0, "传感器");
+ * @note      汉字必须已在OLED_CF16x16字模表中定义
+ ****************************************************************/
 void OLED_ShowChinese(uint8_t X, uint8_t Y, char *Chinese)
 {
 	uint8_t pChinese = 0;
@@ -423,16 +381,19 @@ void OLED_ShowChinese(uint8_t X, uint8_t Y, char *Chinese)
 	}
 }
 
-/**
-  * @brief  OLED初始化
-  * @param  无
-  * @retval 无
-  */
-void OLED_Init(void)
+/*****************************************************************
+ * @brief     初始化OLED的I2C总线和SSD1306显示参数
+ * @param     I2C 指向OLED所使用的软件I2C总线句柄
+ * @return    void
+ * @example   OLED_Init(&OLED_I2C);
+ * @note      函数只清空STM32显存，需要OLED_Refresh才会更新屏幕
+ ****************************************************************/
+void OLED_Init(const BSP_I2C_TypeDef *I2C)
 {
 	uint32_t i, j;
 
-	OLED_GPIO_Init();
+	OLED_I2C = I2C;
+	BSP_I2C_Init(OLED_I2C);
 
 	for (i = 0; i < 1000; i++)			//上电延时
 	{
@@ -479,4 +440,3 @@ void OLED_Init(void)
 		
 	OLED_Clear();				//OLED清屏
 }
-

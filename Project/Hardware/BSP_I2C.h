@@ -11,7 +11,6 @@ typedef struct
 	uint16_t SDA_GPIO_Pin;
 	/* If SCL and SDA use different ports, combine both clocks with |. */
 	uint32_t GPIO_Clock;
-	uint16_t DelayTimeUs;
 } BSP_I2C_TypeDef;
 
 void BSP_I2C_Init(const BSP_I2C_TypeDef *I2C);
@@ -24,5 +23,9 @@ void BSP_I2C_SendNAck(const BSP_I2C_TypeDef *I2C);
 uint8_t BSP_I2C_ReceiveAck(const BSP_I2C_TypeDef *I2C);
 uint8_t BSP_I2C_ReadReg(const BSP_I2C_TypeDef *I2C,
 	uint8_t DeviceAddress, uint8_t RegAddress);
+void BSP_I2C_WriteReg16Addr(const BSP_I2C_TypeDef *I2C,
+	uint8_t DeviceAddress, uint16_t RegAddress, uint8_t Data);
+uint8_t BSP_I2C_ReadReg16Addr(const BSP_I2C_TypeDef *I2C,
+	uint8_t DeviceAddress, uint16_t RegAddress);
 
 #endif

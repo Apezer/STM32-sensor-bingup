@@ -1,5 +1,4 @@
 #include "stm32f10x.h"
-#include "Delay.h"
 #include "BSP_I2C.h"
 
 /***********************************************************
@@ -8,12 +7,11 @@
  * @param     BitValue Clock line level, 0 for low and non-zero for released high
  * @return    void
  * @example   BSP_I2C_WriteSCL(I2C, 1);
- * @note      The configured delay is applied after changing the line level
+ * @note      This function changes only the GPIO output level
  ****************************************************************/
 static void BSP_I2C_WriteSCL(const BSP_I2C_TypeDef *I2C, uint8_t BitValue)
 {
 	GPIO_WriteBit(I2C->SCL_GPIO_Port, I2C->SCL_GPIO_Pin, (BitAction)BitValue);
-	Delay_us(I2C->DelayTimeUs);
 }
 
 /***********************************************************
@@ -27,7 +25,6 @@ static void BSP_I2C_WriteSCL(const BSP_I2C_TypeDef *I2C, uint8_t BitValue)
 static void BSP_I2C_WriteSDA(const BSP_I2C_TypeDef *I2C, uint8_t BitValue)
 {
 	GPIO_WriteBit(I2C->SDA_GPIO_Port, I2C->SDA_GPIO_Pin, (BitAction)BitValue);
-	Delay_us(I2C->DelayTimeUs);
 }
 
 /***********************************************************
@@ -39,11 +36,7 @@ static void BSP_I2C_WriteSDA(const BSP_I2C_TypeDef *I2C, uint8_t BitValue)
  ****************************************************************/
 static uint8_t BSP_I2C_ReadSDA(const BSP_I2C_TypeDef *I2C)
 {
-	uint8_t BitValue;
-
-	BitValue = GPIO_ReadInputDataBit(I2C->SDA_GPIO_Port, I2C->SDA_GPIO_Pin);
-	Delay_us(I2C->DelayTimeUs);
-	return BitValue;
+	return GPIO_ReadInputDataBit(I2C->SDA_GPIO_Port, I2C->SDA_GPIO_Pin);
 }
 
 /***********************************************************
@@ -96,6 +89,7 @@ void BSP_I2C_Start(const BSP_I2C_TypeDef *I2C)
  ****************************************************************/
 void BSP_I2C_Stop(const BSP_I2C_TypeDef *I2C)
 {
+	BSP_I2C_WriteSCL(I2C, 0);
 	BSP_I2C_WriteSDA(I2C, 0);
 	BSP_I2C_WriteSCL(I2C, 1);
 	BSP_I2C_WriteSDA(I2C, 1);
@@ -115,11 +109,11 @@ void BSP_I2C_SendByte(const BSP_I2C_TypeDef *I2C, uint8_t Byte)
 
 	for (i = 0; i < 8; i++)
 	{
-		BSP_I2C_WriteSCL(I2C, 0);		
+		BSP_I2C_WriteSCL(I2C, 0);
 		BSP_I2C_WriteSDA(I2C, Byte & (0x80 >> i));
 		BSP_I2C_WriteSCL(I2C, 1);
-		BSP_I2C_WriteSCL(I2C, 0);
 	}
+	BSP_I2C_WriteSCL(I2C, 0);
 }
 
 /***********************************************************
@@ -137,13 +131,14 @@ uint8_t BSP_I2C_ReceiveByte(const BSP_I2C_TypeDef *I2C)
 	BSP_I2C_WriteSDA(I2C, 1);
 	for (i = 0; i < 8; i++)
 	{
+		BSP_I2C_WriteSCL(I2C, 0);
 		BSP_I2C_WriteSCL(I2C, 1);
 		if (BSP_I2C_ReadSDA(I2C) == 1)
 		{
 			Byte |= (0x80 >> i);
 		}
-		BSP_I2C_WriteSCL(I2C, 0);
 	}
+	BSP_I2C_WriteSCL(I2C, 0);
 
 	return Byte;
 }
@@ -157,9 +152,11 @@ uint8_t BSP_I2C_ReceiveByte(const BSP_I2C_TypeDef *I2C)
  ****************************************************************/
 void BSP_I2C_SendAck(const BSP_I2C_TypeDef *I2C)
 {
+	BSP_I2C_WriteSCL(I2C, 0);
 	BSP_I2C_WriteSDA(I2C, 0);
 	BSP_I2C_WriteSCL(I2C, 1);
 	BSP_I2C_WriteSCL(I2C, 0);
+	BSP_I2C_WriteSDA(I2C, 1);
 }
 
 /***********************************************************
@@ -171,6 +168,7 @@ void BSP_I2C_SendAck(const BSP_I2C_TypeDef *I2C)
  ****************************************************************/
 void BSP_I2C_SendNAck(const BSP_I2C_TypeDef *I2C)
 {
+	BSP_I2C_WriteSCL(I2C, 0);
 	BSP_I2C_WriteSDA(I2C, 1);
 	BSP_I2C_WriteSCL(I2C, 1);
 	BSP_I2C_WriteSCL(I2C, 0);
@@ -187,6 +185,7 @@ uint8_t BSP_I2C_ReceiveAck(const BSP_I2C_TypeDef *I2C)
 {
 	uint8_t AckBit;
 
+	BSP_I2C_WriteSCL(I2C, 0);
 	BSP_I2C_WriteSDA(I2C, 1);
 	BSP_I2C_WriteSCL(I2C, 1);
 	AckBit = BSP_I2C_ReadSDA(I2C);
@@ -212,6 +211,63 @@ uint8_t BSP_I2C_ReadReg(const BSP_I2C_TypeDef *I2C,	uint8_t DeviceAddress, uint8
 	BSP_I2C_SendByte(I2C, (uint8_t)(DeviceAddress << 1));
 	BSP_I2C_ReceiveAck(I2C);
 	BSP_I2C_SendByte(I2C, RegAddress);
+	BSP_I2C_ReceiveAck(I2C);
+
+	BSP_I2C_Start(I2C);
+	BSP_I2C_SendByte(I2C, (uint8_t)((DeviceAddress << 1) | 0x01));
+	BSP_I2C_ReceiveAck(I2C);
+	Data = BSP_I2C_ReceiveByte(I2C);
+	BSP_I2C_SendNAck(I2C);
+	BSP_I2C_Stop(I2C);
+
+	return Data;
+}
+
+/***********************************************************
+ * @brief     向使用16位寄存器地址的I2C设备写入一个字节
+ * @param     I2C           指向软件I2C总线配置
+ * @param     DeviceAddress 7位I2C设备地址
+ * @param     RegAddress    16位寄存器地址
+ * @param     Data          要写入的一个字节数据
+ * @return    无
+ * @example   BSP_I2C_WriteReg16Addr(I2C, 0x29, 0x0018, 0x01);
+ * @note      寄存器地址按照高字节在前、低字节在后的顺序发送
+ ****************************************************************/
+void BSP_I2C_WriteReg16Addr(const BSP_I2C_TypeDef *I2C,
+	uint8_t DeviceAddress, uint16_t RegAddress, uint8_t Data)
+{
+	BSP_I2C_Start(I2C);
+	BSP_I2C_SendByte(I2C, (uint8_t)(DeviceAddress << 1));
+	BSP_I2C_ReceiveAck(I2C);
+	BSP_I2C_SendByte(I2C, (uint8_t)(RegAddress >> 8));
+	BSP_I2C_ReceiveAck(I2C);
+	BSP_I2C_SendByte(I2C, (uint8_t)RegAddress);
+	BSP_I2C_ReceiveAck(I2C);
+	BSP_I2C_SendByte(I2C, Data);
+	BSP_I2C_ReceiveAck(I2C);
+	BSP_I2C_Stop(I2C);
+}
+
+/***********************************************************
+ * @brief     从使用16位寄存器地址的I2C设备读取一个字节
+ * @param     I2C           指向软件I2C总线配置
+ * @param     DeviceAddress 7位I2C设备地址
+ * @param     RegAddress    16位寄存器地址
+ * @return    uint8_t 读取到的寄存器值
+ * @example   Data = BSP_I2C_ReadReg16Addr(I2C, 0x29, 0x0000);
+ * @note      寄存器地址按照高字节在前、低字节在后的顺序发送
+ ****************************************************************/
+uint8_t BSP_I2C_ReadReg16Addr(const BSP_I2C_TypeDef *I2C,
+	uint8_t DeviceAddress, uint16_t RegAddress)
+{
+	uint8_t Data;
+
+	BSP_I2C_Start(I2C);
+	BSP_I2C_SendByte(I2C, (uint8_t)(DeviceAddress << 1));
+	BSP_I2C_ReceiveAck(I2C);
+	BSP_I2C_SendByte(I2C, (uint8_t)(RegAddress >> 8));
+	BSP_I2C_ReceiveAck(I2C);
+	BSP_I2C_SendByte(I2C, (uint8_t)RegAddress);
 	BSP_I2C_ReceiveAck(I2C);
 
 	BSP_I2C_Start(I2C);

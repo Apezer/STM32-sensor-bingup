@@ -720,6 +720,16 @@
               <FileType>5</FileType>
               <FilePath>.\Hardware\MPU6050.h</FilePath>
             </File>
+            <File>
+              <FileName>VL6180X.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Hardware\VL6180X.c</FilePath>
+            </File>
+            <File>
+              <FileName>VL6180X.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\Hardware\VL6180X.h</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

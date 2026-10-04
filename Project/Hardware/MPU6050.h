@@ -44,6 +44,8 @@ uint8_t MPU6050_ReadReg(uint8_t RegAddress);
 void MPU6050_Init(const BSP_I2C_TypeDef *I2C);
 uint8_t MPU6050_GetID(void);
 void MPU6050_GetData(MPU6050_DataTypeDef *Data);
+void MPU6050_CalculateRollPitch(const MPU6050_DataTypeDef *Data,
+	int16_t *Roll, int16_t *Pitch);
 
 int32_t MPU6050_AccelRawToMg(int16_t RawValue);
 int32_t MPU6050_GyroRawToDeciDps(int16_t RawValue);

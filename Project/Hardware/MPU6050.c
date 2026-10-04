@@ -2,11 +2,13 @@
 #include "Delay.h"
 #include "BSP_I2C.h"
 #include "MPU6050.h"
+#include <math.h>
 
 /* AD0 is low, so the MPU6050 7-bit I2C address is 0x68. */
 #define MPU6050_ADDRESS_7BIT   0x68
 #define MPU6050_WRITE_ADDRESS  (MPU6050_ADDRESS_7BIT << 1)
 #define MPU6050_READ_ADDRESS   ((MPU6050_ADDRESS_7BIT << 1) | 0x01)
+#define MPU6050_RAD_TO_DECI_DEGREE  572.9577951
 
 static const BSP_I2C_TypeDef *MPU6050_I2C;
 
@@ -149,6 +151,31 @@ void MPU6050_GetData(MPU6050_DataTypeDef *Data)
 	Data->GyroX = (int16_t)((Buffer[8] << 8) | Buffer[9]);
 	Data->GyroY = (int16_t)((Buffer[10] << 8) | Buffer[11]);
 	Data->GyroZ = (int16_t)((Buffer[12] << 8) | Buffer[13]);
+}
+
+/***********************************************************
+ * @brief     Calculates roll and pitch from raw accelerometer data
+ * @param     Data  Pointer to the MPU6050 raw sensor data
+ * @param     Roll  Pointer that receives roll in 0.1 degrees
+ * @param     Pitch Pointer that receives pitch in 0.1 degrees
+ * @return    void
+ * @example   MPU6050_CalculateRollPitch(&MPU6050_Data, &Roll, &Pitch);
+ * @note      The result uses gravity only and is reliable mainly when acceleration is small
+ ****************************************************************/
+void MPU6050_CalculateRollPitch(const MPU6050_DataTypeDef *Data,
+	int16_t *Roll, int16_t *Pitch)
+{
+	double AccelX = (double)Data->AccelX;
+	double AccelY = (double)Data->AccelY;
+	double AccelZ = (double)Data->AccelZ;
+	double RollRadian;
+	double PitchRadian;
+
+	RollRadian = atan2(AccelY, AccelZ);
+	PitchRadian = atan2(-AccelX, sqrt(AccelY * AccelY + AccelZ * AccelZ));
+
+	*Roll = (int16_t)(RollRadian * MPU6050_RAD_TO_DECI_DEGREE);
+	*Pitch = (int16_t)(PitchRadian * MPU6050_RAD_TO_DECI_DEGREE);
 }
 
 /***********************************************************

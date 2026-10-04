@@ -195,6 +195,29 @@ uint8_t BSP_I2C_ReceiveAck(const BSP_I2C_TypeDef *I2C)
 }
 
 /***********************************************************
+ * @brief     向使用8位寄存器地址的I2C设备写入一个字节
+ * @param     I2C           指向软件I2C总线配置
+ * @param     DeviceAddress 7位I2C设备地址
+ * @param     RegAddress    8位寄存器地址
+ * @param     Data          要写入的一个字节数据
+ * @return    无
+ * @example   BSP_I2C_WriteReg(I2C, 0x76, 0xF4, 0x4F);
+ * @note      DeviceAddress不包含最低位的读写方向位
+ ****************************************************************/
+void BSP_I2C_WriteReg(const BSP_I2C_TypeDef *I2C,
+	uint8_t DeviceAddress, uint8_t RegAddress, uint8_t Data)
+{
+	BSP_I2C_Start(I2C);
+	BSP_I2C_SendByte(I2C, (uint8_t)(DeviceAddress << 1));
+	BSP_I2C_ReceiveAck(I2C);
+	BSP_I2C_SendByte(I2C, RegAddress);
+	BSP_I2C_ReceiveAck(I2C);
+	BSP_I2C_SendByte(I2C, Data);
+	BSP_I2C_ReceiveAck(I2C);
+	BSP_I2C_Stop(I2C);
+}
+
+/***********************************************************
  * @brief     Reads one byte from an I2C device register
  * @param     I2C           Pointer to the software I2C bus configuration
  * @param     DeviceAddress 7-bit I2C device address
@@ -221,6 +244,51 @@ uint8_t BSP_I2C_ReadReg(const BSP_I2C_TypeDef *I2C,	uint8_t DeviceAddress, uint8
 	BSP_I2C_Stop(I2C);
 
 	return Data;
+}
+
+/***********************************************************
+ * @brief     连续读取使用8位寄存器地址的多个寄存器
+ * @param     I2C           指向软件I2C总线配置
+ * @param     DeviceAddress 7位I2C设备地址
+ * @param     RegAddress    起始寄存器地址
+ * @param     Data          保存读取数据的缓冲区
+ * @param     Length        需要连续读取的字节数
+ * @return    无
+ * @example   BSP_I2C_ReadRegs(I2C, 0x76, 0xF7, Buffer, 6);
+ * @note      中间字节发送ACK，最后一个字节发送NACK；Length为0时不访问总线
+ ****************************************************************/
+void BSP_I2C_ReadRegs(const BSP_I2C_TypeDef *I2C,
+	uint8_t DeviceAddress, uint8_t RegAddress, uint8_t *Data, uint8_t Length)
+{
+	uint8_t i;
+
+	if (Length == 0)
+	{
+		return;
+	}
+
+	BSP_I2C_Start(I2C);
+	BSP_I2C_SendByte(I2C, (uint8_t)(DeviceAddress << 1));
+	BSP_I2C_ReceiveAck(I2C);
+	BSP_I2C_SendByte(I2C, RegAddress);
+	BSP_I2C_ReceiveAck(I2C);
+
+	BSP_I2C_Start(I2C);
+	BSP_I2C_SendByte(I2C, (uint8_t)((DeviceAddress << 1) | 0x01));
+	BSP_I2C_ReceiveAck(I2C);
+	for (i = 0; i < Length; i++)
+	{
+		Data[i] = BSP_I2C_ReceiveByte(I2C);
+		if (i == Length - 1)
+		{
+			BSP_I2C_SendNAck(I2C);
+		}
+		else
+		{
+			BSP_I2C_SendAck(I2C);
+		}
+	}
+	BSP_I2C_Stop(I2C);
 }
 
 /***********************************************************

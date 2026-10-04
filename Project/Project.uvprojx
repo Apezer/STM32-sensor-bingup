@@ -730,6 +730,16 @@
               <FileType>5</FileType>
               <FilePath>.\Hardware\VL6180X.h</FilePath>
             </File>
+            <File>
+              <FileName>BMP280.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Hardware\BMP280.c</FilePath>
+            </File>
+            <File>
+              <FileName>BMP280.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\Hardware\BMP280.h</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

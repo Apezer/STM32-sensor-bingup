@@ -740,6 +740,36 @@
               <FileType>5</FileType>
               <FilePath>.\Hardware\BMP280.h</FilePath>
             </File>
+            <File>
+              <FileName>AS5600.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Hardware\AS5600.c</FilePath>
+            </File>
+            <File>
+              <FileName>AS5600.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\Hardware\AS5600.h</FilePath>
+            </File>
+            <File>
+              <FileName>BSP_SPI.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Hardware\BSP_SPI.c</FilePath>
+            </File>
+            <File>
+              <FileName>BSP_SPI.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\Hardware\BSP_SPI.h</FilePath>
+            </File>
+            <File>
+              <FileName>W25Q64.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Hardware\W25Q64.c</FilePath>
+            </File>
+            <File>
+              <FileName>W25Q64.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\Hardware\W25Q64.h</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
